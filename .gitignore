@@ -1,0 +1,56 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Vite-specific (future-proof for .env files you'll create)
+# Vite
+.env
+.env.local
+.env.[hostname]
+.env.*.local
+
+# Production builds (covers all Vite output)
+# Production builds
+build/
+
+# Testing/Coverage (if you add tests later)
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output
+
+# Runtime data
+# pnpm
+.pnp*
+.npmstate
+
+# OS generated files (expanded)
+# OS generated files
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+
+
