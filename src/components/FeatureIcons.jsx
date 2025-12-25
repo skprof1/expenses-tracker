@@ -7,9 +7,13 @@ import {
   Tune as TuneIcon,
 } from "@mui/icons-material";
 
-const FeatureIcons = () => {
+const FeatureIcons = ({ onAddTransaction }) => {
   const actions = [
-    { icon: AddIcon, label: "Add Transaction" }, // My priority #1 🚀
+    {
+      icon: AddIcon,
+      label: "Add Transaction",
+      onClick: onAddTransaction, //  connects to modal!
+    },
     { icon: ListIcon, label: "View Transactions" },
     { icon: SearchIcon, label: "Filter Transactions" },
     { icon: TuneIcon, label: "Set Category Limit" },
@@ -22,6 +26,7 @@ const FeatureIcons = () => {
       {actions.map((action, index) => (
         <Box key={index} sx={{ textAlign: "center", minWidth: 140 }}>
           <IconButton
+            onClick={action.onClick}
             sx={{
               width: 72,
               height: 72,
@@ -32,7 +37,9 @@ const FeatureIcons = () => {
                 bgcolor: "primary.main",
                 color: "white",
                 boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
+                transform: action.onClick ? "scale(1.05)" : "none", // extra bounce!
               },
+              transition: "all 0.2s ease",
             }}
             size="large"
           >
