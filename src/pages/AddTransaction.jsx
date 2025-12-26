@@ -19,6 +19,7 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import { incomeCategories, expenseCategories } from "@/data/categories";
+import { addTransactionToFirestore } from "@/firebase/transactionsApi";
 
 const AddTransaction = ({ onBack, onCreate }) => {
   const theme = useTheme();
@@ -44,7 +45,7 @@ const AddTransaction = ({ onBack, onCreate }) => {
     setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const numericAmount = parseFloat(amount);
 
     if (!amount || Number.isNaN(numericAmount) || numericAmount <= 0) {
@@ -66,28 +67,39 @@ const AddTransaction = ({ onBack, onCreate }) => {
     }
 
     const newTransaction = {
-      id: Date.now(), // quick local id; Firestore will replace later
+      id: Date.now(), // local id
       type,
       category,
       amount: numericAmount,
       date,
       note: note.trim(),
-      createdAt: new Date().toISOString(),
     };
 
-    // This will be wired to context + Firebase later
-    if (typeof onCreate === "function") {
-      onCreate(newTransaction);
-    }
+    try {
+      // Save to Firestore first
+      const docId = await addTransactionToFirestore(newTransaction);
 
-    // Reset form, keep type so user can add multiple quickly
-    setAmount("");
-    setNote("");
-    setSnackbar({
-      open: true,
-      message: "Transaction created 🎉",
-      severity: "success",
-    });
+      // Let parent (Dashboard) update local state
+      if (typeof onCreate === "function") {
+        onCreate({ ...newTransaction, id: docId });
+      }
+
+      // Reset form, keep type so user can add multiple quickly
+      setAmount("");
+      setNote("");
+      setSnackbar({
+        open: true,
+        message: "Transaction created 🎉",
+        severity: "success",
+      });
+    } catch (err) {
+      console.error("Error saving transaction:", err);
+      setSnackbar({
+        open: true,
+        message: "Something went wrong while saving. Please try again.",
+        severity: "error",
+      });
+    }
   };
 
   return (
