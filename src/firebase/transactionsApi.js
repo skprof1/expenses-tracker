@@ -23,16 +23,25 @@ export const addTransactionToFirestore = async (transaction) => {
   return docRef.id;
 };
 
-// Fetch all transactions (we'll use this later for "View Transactions")
-export const fetchAllTransactions = async () => {
+// Load all transactions once
+export const fetchAllTransactionsOnce = async () => {
   const q = query(
     collection(db, TRANSACTIONS_COLLECTION),
     orderBy("createdAt", "desc")
   );
 
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  return snapshot.docs.map((doc) => {
+    const data = doc.data();
+
+    return {
+      id: doc.id,
+      ...data,
+      // Normalise date back to string for UI convenience
+      date:
+        data.date instanceof Timestamp
+          ? data.date.toDate().toISOString().split("T")[0]
+          : data.date,
+    };
+  });
 };

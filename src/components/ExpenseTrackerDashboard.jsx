@@ -4,19 +4,56 @@ import SummaryHeader from "./SummaryHeader";
 import DonutCharts from "./DonutCharts";
 import FeatureIcons from "./FeatureIcons";
 import AddTransaction from "@/pages/AddTransaction";
+import { fetchAllTransactionsOnce } from "@/firebase/transactionsApi";
 import styles from "@/styles/Dashboard.module.css";
 
 const ExpenseTrackerDashboard = () => {
   const theme = useTheme();
   const [monthYear, setMonthYear] = useState("DECEMBER 2025");
-  const [balance, setBalance] = useState(5000);
-  const [income, setIncome] = useState(8000);
-  const [expense, setExpense] = useState(3000);
-
-  // Modal state for Add Transaction
+  const [balance, setBalance] = useState(0);
+  const [income, setIncome] = useState(0);
+  const [expense, setExpense] = useState(0);
+  const [allTransactions, setAllTransactions] = useState([]);
+  const [currentMonthTransactions, setCurrentMonthTransactions] = useState([]);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
-  const [transactions, setTransactions] = useState([]);
 
+  // Get current month boundaries (1st to last day)
+  const getCurrentMonthRange = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    return { firstDay, lastDay };
+  };
+
+  // Load all transactions once on mount, filter for current month
+  useEffect(() => {
+    const loadTransactions = async () => {
+      try {
+        const transactions = await fetchAllTransactionsOnce();
+        setAllTransactions(transactions);
+
+        // Filter for current month only
+        const { firstDay, lastDay } = getCurrentMonthRange();
+        const monthTransactions = transactions.filter((t) => {
+          const transDate = new Date(t.date);
+          return transDate >= firstDay && transDate <= lastDay;
+        });
+        setCurrentMonthTransactions(monthTransactions);
+
+        console.log(
+          `Loaded ${transactions.length} total, ${monthTransactions.length} for ${monthYear}`
+        );
+      } catch (error) {
+        console.error("Failed to load transactions:", error);
+      }
+    };
+
+    loadTransactions();
+  }, []);
+
+  // Update month display
   useEffect(() => {
     const now = new Date();
     const monthNames = [
@@ -35,41 +72,46 @@ const ExpenseTrackerDashboard = () => {
     ];
     const currentMonth = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
     setMonthYear(currentMonth);
-    console.log(`Dashboard loaded for ${currentMonth}`); // debug month detection
   }, []);
 
-  // Handle new transaction from modal
-  const handleAddTransaction = (newTransaction) => {
-    console.log("New transaction:", newTransaction); // debug log
-    const updatedTransactions = [...transactions, newTransaction];
-    setTransactions(updatedTransactions);
-
-    // Recalculate totals (will connect to Firebase later)
-    const totalIncome = updatedTransactions
+  // Recalculate totals from current month transactions
+  useEffect(() => {
+    const totalIncome = currentMonthTransactions
       .filter((t) => t.type === "income")
       .reduce((sum, t) => sum + t.amount, 0);
-    const totalExpense = updatedTransactions
+    const totalExpense = currentMonthTransactions
       .filter((t) => t.type === "expense")
       .reduce((sum, t) => sum + t.amount, 0);
 
     setIncome(totalIncome);
     setExpense(totalExpense);
     setBalance(totalIncome - totalExpense);
+  }, [currentMonthTransactions]);
+
+  // Handle new transaction from modal (add to allTransactions + refilter)
+  const handleAddTransaction = (newTransaction) => {
+    console.log("New transaction added:", newTransaction);
+
+    // Add to full list
+    const updatedAllTransactions = [...allTransactions, newTransaction];
+    setAllTransactions(updatedAllTransactions);
+
+    // Check if it's current month (refilter automatically updates totals)
+    const { firstDay, lastDay } = getCurrentMonthRange();
+    const transDate = new Date(newTransaction.date);
+    if (transDate >= firstDay && transDate <= lastDay) {
+      const updatedMonthTransactions = [
+        ...currentMonthTransactions,
+        newTransaction,
+      ];
+      setCurrentMonthTransactions(updatedMonthTransactions);
+    }
 
     // Close modal after success
     setTimeout(() => {
       setAddTransactionOpen(false);
-    }, 1200); // 1.2s delay = smooth UX
+    }, 1200);
   };
-
-  // TODO: replace with real Firestore data fetch
-  // useEffect(() => {
-  //   fetchUserData().then(data => {
-  //     setBalance(data.balance);
-  //     setIncome(data.income);
-  //     setExpense(data.expense);
-  //   });
-  // }, []);
 
   return (
     <Box className={styles.dashboardFullWidth}>
@@ -77,10 +119,18 @@ const ExpenseTrackerDashboard = () => {
         {monthYear}
       </Typography>
       <SummaryHeader balance={balance} income={income} expense={expense} />
-      <DonutCharts balance={balance} expense={expense} />
+      <DonutCharts
+        balance={balance}
+        expense={expense}
+        incomeTransactions={currentMonthTransactions.filter(
+          (t) => t.type === "income"
+        )}
+        expenseTransactions={currentMonthTransactions.filter(
+          (t) => t.type === "expense"
+        )}
+      />
       <FeatureIcons onAddTransaction={() => setAddTransactionOpen(true)} />
 
-      {/* Add Transaction Modal */}
       <Modal
         open={addTransactionOpen}
         onClose={() => setAddTransactionOpen(false)}

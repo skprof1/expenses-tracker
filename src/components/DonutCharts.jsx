@@ -1,7 +1,18 @@
 import React, { useState, useRef } from "react";
 import { Card, Box, Typography } from "@mui/material";
+import {
+  incomeCategories,
+  expenseCategories,
+  incomeColors,
+  expenseColors,
+} from "@/data/categories";
 
-const DonutCharts = ({ balance, expense }) => {
+const DonutCharts = ({
+  balance,
+  expense,
+  incomeTransactions = [],
+  expenseTransactions = [],
+}) => {
   const [tooltip, setTooltip] = useState({
     show: false,
     x: 0,
@@ -10,23 +21,45 @@ const DonutCharts = ({ balance, expense }) => {
     activeChart: "",
   });
 
-  // Sample data - will replace with real firestore data
-  const incomeData = [
-    { value: 40, name: "Salary", color: "#3B82F6", amount: 3200 },
-    { value: 35, name: "Freelance", color: "#F59E0B", amount: 2800 },
-    { value: 25, name: "Bonus", color: "#10B981", amount: 2000 },
-  ];
-
-  const expenseData = [
-    { value: 45, name: "Groceries", color: "#B91C1C", amount: 1350 },
-    { value: 30, name: "Transport", color: "#9626dcff", amount: 900 },
-    { value: 25, name: "Entertainment", color: "#ea5c0aff", amount: 750 },
-  ];
-
   const RADIUS = 105;
   const STROKE_WIDTH = 22;
   const CENTER = 150;
   const CIRC = 2 * Math.PI * RADIUS;
+
+  // Group transactions by category and calculate totals
+  const getCategoryData = (transactions, categories, colors) => {
+    const categoryTotals = {};
+
+    // Sum amounts by category from transactions
+    transactions.forEach((t) => {
+      const cat = t.category;
+      categoryTotals[cat] = (categoryTotals[cat] || 0) + t.amount;
+    });
+
+    // Match with category definitions, assign colors, filter zero amounts
+    return categories
+      .map((cat, index) => ({
+        name: cat.type,
+        value:
+          ((categoryTotals[cat.type] || 0) / Math.max(balance + expense, 1)) *
+          100,
+        amount: categoryTotals[cat.type] || 0,
+        color: colors[index % colors.length],
+      }))
+      .filter((cat) => cat.amount > 0)
+      .slice(0, 12); // max 12 segments (matches category count)
+  };
+
+  const incomeData = getCategoryData(
+    incomeTransactions,
+    incomeCategories,
+    incomeColors
+  );
+  const expenseData = getCategoryData(
+    expenseTransactions,
+    expenseCategories,
+    expenseColors
+  );
 
   const DonutChart = ({
     data,
@@ -36,7 +69,7 @@ const DonutCharts = ({ balance, expense }) => {
     chartType,
   }) => {
     const svgRef = useRef(null);
-    const total = data.reduce((sum, d) => sum + d.value, 0);
+    const total = data.reduce((sum, d) => sum + d.value, 0) || 1;
 
     const segments = data.map((item, i) => {
       const prevSum =
@@ -48,7 +81,6 @@ const DonutCharts = ({ balance, expense }) => {
 
       return { ...item, startAngle, endAngle, arcLength, dashOffset };
     });
-
     // Tooltip detection (took a while to get angles right)
     const handleMouseMove = (e) => {
       if (!svgRef.current) return;
@@ -56,7 +88,6 @@ const DonutCharts = ({ balance, expense }) => {
       const rect = svgRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-
       const dx = x - CENTER;
       const dy = y - CENTER;
       const distance = Math.sqrt(dx * dx + dy * dy);
@@ -71,7 +102,6 @@ const DonutCharts = ({ balance, expense }) => {
 
       let angle = Math.atan2(dy, dx) * (180 / Math.PI);
       if (angle < 0) angle += 360;
-
       // Fixed tooltip positioning after debugging rotation
       const visualAngle = (angle + 270) % 360;
 
@@ -202,7 +232,6 @@ const DonutCharts = ({ balance, expense }) => {
       </Box>
     );
   };
-
   // TODO: add mobile swipe gestures for donuts
   return (
     <Box sx={{ display: "flex", justifyContent: "center", gap: 6, mb: 4 }}>
