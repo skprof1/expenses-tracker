@@ -1,59 +1,39 @@
-import React, { useState, useEffect } from "react";
-import { Box, Typography, useTheme, Modal, Backdrop } from "@mui/material";
+import React, { useEffect, useMemo, useState } from "react";
+import { Box, Typography, Modal, Backdrop } from "@mui/material";
 import SummaryHeader from "./SummaryHeader";
 import DonutCharts from "./DonutCharts";
 import FeatureIcons from "./FeatureIcons";
 import AddTransaction from "@/pages/AddTransaction";
+import ViewTransactions from "@/pages/ViewTransactions";
 import { fetchAllTransactionsOnce } from "@/firebase/transactionsApi";
 import styles from "@/styles/Dashboard.module.css";
 
+/**
+ * ExpenseTrackerDashboard
+ 
+ * - After add/delete, we re-fetch from Firestore to avoid id mismatches and stale UI.
+ */
 const ExpenseTrackerDashboard = () => {
-  const theme = useTheme();
-  const [monthYear, setMonthYear] = useState("DECEMBER 2025");
+  const [monthYear, setMonthYear] = useState("");
   const [balance, setBalance] = useState(0);
   const [income, setIncome] = useState(0);
   const [expense, setExpense] = useState(0);
-  const [allTransactions, setAllTransactions] = useState([]);
-  const [currentMonthTransactions, setCurrentMonthTransactions] = useState([]);
-  const [addTransactionOpen, setAddTransactionOpen] = useState(false);
 
-  // Get current month boundaries (1st to last day)
+  const [allTransactions, setAllTransactions] = useState([]);
+  const [addTransactionOpen, setAddTransactionOpen] = useState(false);
+  const [viewTransactionsOpen, setViewTransactionsOpen] = useState(false);
+
+  // Current month boundaries (1st day 00:00:00 to last day 23:59:59)
   const getCurrentMonthRange = () => {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
     const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
+    const lastDay = new Date(year, month + 1, 0, 23, 59, 59, 999);
     return { firstDay, lastDay };
   };
 
-  // Load all transactions once on mount, filter for current month
-  useEffect(() => {
-    const loadTransactions = async () => {
-      try {
-        const transactions = await fetchAllTransactionsOnce();
-        setAllTransactions(transactions);
-
-        // Filter for current month only
-        const { firstDay, lastDay } = getCurrentMonthRange();
-        const monthTransactions = transactions.filter((t) => {
-          const transDate = new Date(t.date);
-          return transDate >= firstDay && transDate <= lastDay;
-        });
-        setCurrentMonthTransactions(monthTransactions);
-
-        console.log(
-          `Loaded ${transactions.length} total, ${monthTransactions.length} for ${monthYear}`
-        );
-      } catch (error) {
-        console.error("Failed to load transactions:", error);
-      }
-    };
-
-    loadTransactions();
-  }, []);
-
-  // Update month display
+  // Build "MONTH YYYY" label
   useEffect(() => {
     const now = new Date();
     const monthNames = [
@@ -70,47 +50,75 @@ const ExpenseTrackerDashboard = () => {
       "NOVEMBER",
       "DECEMBER",
     ];
-    const currentMonth = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
-    setMonthYear(currentMonth);
+    setMonthYear(`${monthNames[now.getMonth()]} ${now.getFullYear()}`);
   }, []);
 
-  // Recalculate totals from current month transactions
+  // Load from Firestore (single place)
+  const refreshFromFirestore = async () => {
+    const tx = await fetchAllTransactionsOnce();
+    setAllTransactions(Array.isArray(tx) ? tx : []);
+  };
+
+  // Initial load
+  useEffect(() => {
+    (async () => {
+      try {
+        await refreshFromFirestore();
+      } catch (e) {
+        console.error("Failed to load transactions:", e);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Only current month transactions (derived, not separately stored)
+  const currentMonthTransactions = useMemo(() => {
+    const { firstDay, lastDay } = getCurrentMonthRange();
+    return (allTransactions || []).filter((t) => {
+      const d = new Date(t.date);
+      return d >= firstDay && d <= lastDay;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allTransactions]);
+
+  // Totals derived from current month
   useEffect(() => {
     const totalIncome = currentMonthTransactions
       .filter((t) => t.type === "income")
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
     const totalExpense = currentMonthTransactions
       .filter((t) => t.type === "expense")
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
     setIncome(totalIncome);
     setExpense(totalExpense);
     setBalance(totalIncome - totalExpense);
   }, [currentMonthTransactions]);
 
-  // Handle new transaction from modal (add to allTransactions + refilter)
-  const handleAddTransaction = (newTransaction) => {
-    console.log("New transaction added:", newTransaction);
-
-    // Add to full list
-    const updatedAllTransactions = [...allTransactions, newTransaction];
-    setAllTransactions(updatedAllTransactions);
-
-    // Check if it's current month (refilter automatically updates totals)
-    const { firstDay, lastDay } = getCurrentMonthRange();
-    const transDate = new Date(newTransaction.date);
-    if (transDate >= firstDay && transDate <= lastDay) {
-      const updatedMonthTransactions = [
-        ...currentMonthTransactions,
-        newTransaction,
-      ];
-      setCurrentMonthTransactions(updatedMonthTransactions);
+  /**
+   * Called by AddTransaction after Firestore add succeeds.
+   * We re-fetch instead of appending local objects (prevents numeric-id bugs).
+   */
+  const handleCreated = async () => {
+    try {
+      await refreshFromFirestore();
+      setTimeout(() => setAddTransactionOpen(false), 400);
+    } catch (e) {
+      console.error("Refresh after create failed:", e);
     }
+  };
 
-    // Close modal after success
-    setTimeout(() => {
-      setAddTransactionOpen(false);
-    }, 1200);
+  /**
+   * Called by ViewTransactions after Firestore delete succeeds.
+   * Keeps dashboard charts/totals in sync.
+   */
+  const handleDeleted = async () => {
+    try {
+      await refreshFromFirestore();
+    } catch (e) {
+      console.error("Refresh after delete failed:", e);
+    }
   };
 
   return (
@@ -118,18 +126,24 @@ const ExpenseTrackerDashboard = () => {
       <Typography variant="h3" className={styles.monthTitle}>
         {monthYear}
       </Typography>
+
       <SummaryHeader balance={balance} income={income} expense={expense} />
+
       <DonutCharts
         balance={balance}
         expense={expense}
         incomeTransactions={currentMonthTransactions.filter(
-          (t) => t.type === "income"
+          (t) => t.type === "income",
         )}
         expenseTransactions={currentMonthTransactions.filter(
-          (t) => t.type === "expense"
+          (t) => t.type === "expense",
         )}
       />
-      <FeatureIcons onAddTransaction={() => setAddTransactionOpen(true)} />
+
+      <FeatureIcons
+        onAddTransaction={() => setAddTransactionOpen(true)}
+        onViewTransactions={() => setViewTransactionsOpen(true)}
+      />
 
       <Modal
         open={addTransactionOpen}
@@ -153,7 +167,33 @@ const ExpenseTrackerDashboard = () => {
       >
         <AddTransaction
           onBack={() => setAddTransactionOpen(false)}
-          onCreate={handleAddTransaction}
+          onCreate={handleCreated}
+        />
+      </Modal>
+
+      <Modal
+        open={viewTransactionsOpen}
+        onClose={() => setViewTransactionsOpen(false)}
+        slots={{ backdrop: Backdrop }}
+        slotProps={{
+          backdrop: {
+            timeout: 300,
+            sx: {
+              backdropFilter: "blur(4px)",
+              backgroundColor: "rgba(0,0,0,0.6)",
+            },
+          },
+        }}
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          p: 2,
+        }}
+      >
+        <ViewTransactions
+          onBack={() => setViewTransactionsOpen(false)}
+          onDeleted={handleDeleted}
         />
       </Modal>
     </Box>
