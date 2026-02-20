@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   Box,
-  Typography,
   IconButton,
   Select,
   MenuItem,
@@ -17,10 +16,15 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import { incomeCategories, expenseCategories } from "@/data/categories";
 import { addTransactionToFirestore } from "@/firebase/transactionsApi";
 
+/**
+ * AddTransaction
+ * - No local numeric ids.
+ * - Uses native date input (single calendar icon from browser).
+ * - After success, dashboard re-fetches from Firestore.
+ */
 const AddTransaction = ({ onBack, onCreate }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -28,9 +32,7 @@ const AddTransaction = ({ onBack, onCreate }) => {
   const [type, setType] = useState("income");
   const [category, setCategory] = useState("Salary");
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(
-    new Date().toISOString().split("T")[0] // yyyy-mm-dd
-  );
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]); // yyyy-mm-dd
   const [note, setNote] = useState("");
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -66,8 +68,7 @@ const AddTransaction = ({ onBack, onCreate }) => {
       return;
     }
 
-    const newTransaction = {
-      id: Date.now(), // local id
+    const payload = {
       type,
       category,
       amount: numericAmount,
@@ -76,22 +77,20 @@ const AddTransaction = ({ onBack, onCreate }) => {
     };
 
     try {
-      // Save to Firestore first
-      const docId = await addTransactionToFirestore(newTransaction);
+      await addTransactionToFirestore(payload);
 
-      // Let parent (Dashboard) update local state
-      if (typeof onCreate === "function") {
-        onCreate({ ...newTransaction, id: docId });
-      }
-
-      // Reset form, keep type so user can add multiple quickly
       setAmount("");
       setNote("");
+
       setSnackbar({
         open: true,
-        message: "Transaction created 🎉",
+        message: "Transaction created",
         severity: "success",
       });
+
+      if (typeof onCreate === "function") {
+        onCreate();
+      }
     } catch (err) {
       console.error("Error saving transaction:", err);
       setSnackbar({
@@ -104,36 +103,25 @@ const AddTransaction = ({ onBack, onCreate }) => {
 
   return (
     <Container maxWidth="sm" sx={{ py: 4, minHeight: "100vh" }}>
-      {/* Header */}
-      <Box sx={{ display: "flex", alignItems: "center", mb: 5 }}>
+      {/* Back only */}
+      <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
         <IconButton
           onClick={onBack}
           sx={{
-            mr: 2,
             bgcolor: "rgba(255,255,255,0.9)",
             color: "text.primary",
             "&:hover": { bgcolor: "rgba(255,255,255,0.95)" },
           }}
+          aria-label="back"
         >
           <ArrowBackIcon />
         </IconButton>
-        <Typography
-          variant={isMobile ? "h4" : "h3"}
-          fontWeight={800}
-          sx={{
-            color: "text.primary",
-            textAlign: "center",
-            flexGrow: 1,
-          }}
-        >
-          Add Transaction
-        </Typography>
+        <Box sx={{ flexGrow: 1 }} />
       </Box>
 
-      {/* Form Card */}
       <Card
         sx={{
-          p: 4,
+          p: isMobile ? 3 : 4,
           borderRadius: "24px",
           boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
           bgcolor: "background.paper",
@@ -141,7 +129,6 @@ const AddTransaction = ({ onBack, onCreate }) => {
         }}
       >
         <Box sx={{ display: "grid", gap: 3 }}>
-          {/* Row 1: Type & Category */}
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 }}>
             <FormControl fullWidth size="small">
               <InputLabel>Type</InputLabel>
@@ -155,7 +142,6 @@ const AddTransaction = ({ onBack, onCreate }) => {
                       ? incomeCategories
                       : expenseCategories;
                   setType(nextType);
-                  // pick first available as default
                   setCategory(nextCategories[0]?.type || "");
                 }}
                 slotProps={{ inputLabel: { shrink: true } }}
@@ -184,7 +170,6 @@ const AddTransaction = ({ onBack, onCreate }) => {
             </FormControl>
           </Box>
 
-          {/* Row 2: Amount & Date */}
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 }}>
             <TextField
               label="Amount"
@@ -201,23 +186,15 @@ const AddTransaction = ({ onBack, onCreate }) => {
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
+              // Native date input already has a calendar icon -> do not add another
               slotProps={{
-                input: {
-                  min: "2025-11-15",
-                },
                 inputLabel: { shrink: true },
-              }}
-              InputProps={{
-                endAdornment: (
-                  <CalendarTodayIcon sx={{ color: "action.active", mr: 1 }} />
-                ),
               }}
               sx={{ "& .MuiOutlinedInput-root": { borderRadius: "16px" } }}
               size="small"
             />
           </Box>
 
-          {/* Optional note */}
           <TextField
             label="Note (optional)"
             multiline
@@ -230,7 +207,6 @@ const AddTransaction = ({ onBack, onCreate }) => {
             size="small"
           />
 
-          {/* Create Button */}
           <Button
             onClick={handleSubmit}
             variant="contained"
@@ -256,7 +232,6 @@ const AddTransaction = ({ onBack, onCreate }) => {
         </Box>
       </Card>
 
-      {/* Snackbar */}
       <Snackbar
         anchorOrigin={{ vertical: "top", horizontal: "right" }}
         open={snackbar.open}
