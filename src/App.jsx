@@ -1,13 +1,18 @@
 import React from "react";
+import { ThemeProvider } from "@mui/material/styles";
+import theme from "@/theme/theme";
 import ExpenseTrackerDashboard from "@/components/ExpenseTrackerDashboard";
-import "@/styles/Dashboard.module.css";
 
-function App() {
+/**
+ * Main App Component
+ * Wraps the entire app with the custom theme.
+ */
+const App = () => {
   return (
-    <div className="app">
+    <ThemeProvider theme={theme}>
       <ExpenseTrackerDashboard />
-    </div>
+    </ThemeProvider>
   );
-}
+};
 
 export default App;
