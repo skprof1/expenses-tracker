@@ -7,6 +7,7 @@ import {
   Timestamp,
   doc,
   deleteDoc,
+  where,
 } from "firebase/firestore";
 import { db } from "./config";
 
@@ -56,6 +57,47 @@ export const deleteTransactionFromFirestore = async (id) => {
 export const fetchAllTransactionsOnce = async () => {
   const q = query(
     collection(db, TRANSACTIONS_COLLECTION),
+    orderBy("date", "desc"),
+  );
+
+  const snapshot = await getDocs(q);
+
+  return snapshot.docs.map((docSnap) => {
+    const data = docSnap.data();
+    const ts = data?.date;
+
+    return {
+      id: docSnap.id,
+      ...data,
+      date:
+        ts && typeof ts.toDate === "function"
+          ? ts.toDate().toISOString().split("T")[0]
+          : data.date,
+    };
+  });
+};
+
+/**
+ * Fetch all transactions for a specific year + month (no type filter).
+ * - Uses Firestore Timestamp range: [startOfMonth, startOfNextMonth).
+ * - Ordered by transaction date desc (newest first).
+ *
+ * Why no type filter:
+ * - Type filtering is done client-side in FilterTransactions to avoid composite index errors.
+ */
+export const fetchMonthTransactionsOnce = async ({ year, monthIndex }) => {
+  if (typeof year !== "number")
+    throw new Error("fetchMonthTransactionsOnce: year must be a number");
+  if (typeof monthIndex !== "number")
+    throw new Error("fetchMonthTransactionsOnce: monthIndex must be a number");
+
+  const start = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+  const end = new Date(year, monthIndex + 1, 1, 0, 0, 0, 0);
+
+  const q = query(
+    collection(db, TRANSACTIONS_COLLECTION),
+    where("date", ">=", Timestamp.fromDate(start)),
+    where("date", "<", Timestamp.fromDate(end)),
     orderBy("date", "desc"),
   );
 

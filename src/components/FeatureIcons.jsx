@@ -10,11 +10,14 @@ import {
 /**
  * FeatureIcons
  * Dashboard quick actions.
- * - Uses stable keys (label) instead of array index.
- * - Adds aria-label for icon-only buttons (accessibility).
- * - Disables actions that are not implemented yet.
+ * - Add/View/Filter are enabled.
+ * - "Set Category Limit" stays disabled until implemented.
  */
-const FeatureIcons = ({ onAddTransaction, onViewTransactions }) => {
+const FeatureIcons = ({
+  onAddTransaction,
+  onViewTransactions,
+  onFilterTransactions,
+}) => {
   const actions = [
     {
       key: "add",
@@ -34,8 +37,8 @@ const FeatureIcons = ({ onAddTransaction, onViewTransactions }) => {
       key: "filter",
       icon: SearchIcon,
       label: "Filter Transactions",
-      onClick: undefined,
-      enabled: false,
+      onClick: onFilterTransactions,
+      enabled: true,
     },
     {
       key: "limit",
